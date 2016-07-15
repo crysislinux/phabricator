@@ -24,6 +24,24 @@ final class PhabricatorPasswordSettingsPanel extends PhabricatorSettingsPanel {
     return true;
   }
 
+  public function resetLdapPassword($username, $password) {
+    $gugud_ldap_connect = ldap_connect("gugud.com");  // assuming the LDAP server is on this host
+    if ($gugud_ldap_connect) {
+      // bind with appropriate dn to give update access
+      ldap_set_option($gugud_ldap_connect, LDAP_OPT_PROTOCOL_VERSION, 3);
+      $gugud_r = ldap_bind($gugud_ldap_connect, "cn=admin,dc=gugud,dc=com", "ts3qdf");
+
+      // prepare data
+      $gugud_user_entry["userpassword"] = $password;
+      // add data to directory
+      $gugud_r = ldap_modify($gugud_ldap_connect, "uid=" . $username . ",ou=people,dc=gugud,dc=com", $gugud_user_entry);
+
+      ldap_close($gugud_ldap_connect);
+    } else {
+      echo "caonnot connect to server\n";
+    }
+  }
+
   public function processRequest(AphrontRequest $request) {
     $user = $request->getUser();
 
@@ -85,6 +103,7 @@ final class PhabricatorPasswordSettingsPanel extends PhabricatorSettingsPanel {
       }
 
       if (!$errors) {
+        $this->resetLdapPassword($user->getUserName(), $pass);
         // This write is unguarded because the CSRF token has already
         // been checked in the call to $request->isFormPost() and
         // the CSRF token depends on the password hash, so when it
