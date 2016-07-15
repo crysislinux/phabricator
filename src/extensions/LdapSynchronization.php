@@ -47,4 +47,15 @@ final class LdapSynchronization {
       throw new LdapModifyException();
     }
   }
+
+  public function syncPassword($username, $password) {
+    $this->connect();
+    // prepare data
+    $gugud_user_entry["userpassword"] = $password;
+    // add data to directory
+    $success = ldap_modify($this->ldapIdentifier, "uid=" . $username . ",ou=people,dc=gugud,dc=com", $gugud_user_entry);
+    if (!$success) {
+      throw new LdapModifyException();
+    }
+  }
 }
