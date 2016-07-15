@@ -58,4 +58,26 @@ final class LdapSynchronization {
       throw new LdapModifyException();
     }
   }
+
+  public function addUser($username, $realname, $password) {
+    $this->connect();
+
+    // prepare data
+    $gugud_user_entry["uid"] = $username;
+    $gugud_user_entry["cn"] = $realname;
+
+    $gugud_user_entry["userpassword"] = $password;
+    $gugud_user_entry["sn"] = "Jones";
+    $gugud_user_entry["givenname"] = "Jones";
+    $gugud_user_entry["objectclass"][0] = "inetOrgPerson";
+    $gugud_user_entry["objectclass"][1] = "organizationalPerson";
+    $gugud_user_entry["objectclass"][2] = "person";
+    $gugud_user_entry["objectclass"][3] = "top";
+
+    // add data to directory
+    $success = ldap_add($this->ldapIdentifier, "uid=" . $username . ",ou=people,dc=gugud,dc=com", $gugud_user_entry);
+    if (!$success) {
+      throw new LdapAddUserException();
+    }
+  }
 }
