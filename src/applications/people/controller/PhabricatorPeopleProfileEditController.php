@@ -3,27 +3,10 @@
 final class PhabricatorPeopleProfileEditController
   extends PhabricatorPeopleProfileController {
 
-  public function syncLdapRealName($username, $realname) {
-    $gugud_ldap_connect = ldap_connect("gugud.com");  // assuming the LDAP server is on this host
-    if ($gugud_ldap_connect) {
-      // bind with appropriate dn to give update access
-      ldap_set_option($gugud_ldap_connect, LDAP_OPT_PROTOCOL_VERSION, 3);
-      $gugud_r = ldap_bind($gugud_ldap_connect, "cn=admin,dc=gugud,dc=com", "ts3qdf");
-
-      // prepare data
-      $gugud_user_entry["cn"] = $realname;
-      // add data to directory
-      $gugud_r = ldap_modify($gugud_ldap_connect, "uid=" . $username . ",ou=people,dc=gugud,dc=com", $gugud_user_entry);
-
-      ldap_close($gugud_ldap_connect);
-    } else {
-      echo "caonnot connect to server\n";
-    }
-  }
-
   public function handleRequest(AphrontRequest $request) {
     $viewer = $this->getViewer();
     $id = $request->getURIData('id');
+    $errors = array();
 
     $user = id(new PhabricatorPeopleQuery())
       ->setViewer($viewer)
@@ -69,13 +52,22 @@ final class PhabricatorPeopleProfileEditController
           break;
         }
       }
-      $this->syncLdapRealName($user->getUserName(), $realname);
-
+      $ldapSync = new LdapSynchronization();
       try {
-        $editor->applyTransactions($user, $xactions);
-        return id(new AphrontRedirectResponse())->setURI($done_uri);
-      } catch (PhabricatorApplicationTransactionValidationException $ex) {
-        $validation_exception = $ex;
+        $ldapSync->syncRealName($user->getUserName(), $realname);
+      } catch(LdapConnectException $exception) {
+        $errors[] = pht('Cannot connect to the LDAP server');
+      } catch(LdapModifyException $exception) {
+        $errors[] = pht('Modify LDAP content failed');
+      }
+
+      if (!$errors) {
+        try {
+          $editor->applyTransactions($user, $xactions);
+          return id(new AphrontRedirectResponse())->setURI($done_uri);
+        } catch (PhabricatorApplicationTransactionValidationException $ex) {
+          $validation_exception = $ex;
+        }
       }
     }
 
@@ -105,6 +97,7 @@ final class PhabricatorPeopleProfileEditController
       ->setHeaderText(pht('Profile'))
       ->setValidationException($validation_exception)
       ->setBackground(PHUIObjectBoxView::BLUE_PROPERTY)
+      ->setFormErrors($errors)
       ->setForm($form);
 
     $crumbs = $this->buildApplicationCrumbs();
